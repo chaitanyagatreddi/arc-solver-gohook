@@ -50,10 +50,10 @@
 **Complete in:** 45 minutes
 
 - [x] `GET /hidden-rules/health` returns collection, pending, rechecked, removed, stayed, and skipped counts.
-- [ ] Log collection, pending, rechecked, removed, skipped, and failure counts per subreddit.
+- [x] Log collection, pending, rechecked, removed, skipped, and failure counts per subreddit. Local query: `python scripts/pipeline_status.py`.
 - [ ] Add an operational alert for a failed collection or recheck.
 - [ ] Save a manual verification query or dashboard view.
-- [ ] Write the handoff: runbook, cron secret location, and the next review date.
+- [x] Write the handoff: runbook, cron secret location, and the next review date. See `HANDOFF.md`.
 
 **Done when:** one operator can see pipeline health without opening raw rows.
 
