@@ -1,15 +1,18 @@
 """Mountable FastAPI router for BanAware, Scout, cron, and feedback."""
 from __future__ import annotations
 
+import hmac
+import os
 from datetime import date, timedelta
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from .cohort import FIRST_TEN
 from .conditions import InvalidCondition
-from .service import Store, matching_warnings
+from .service import Store, collect_public_posts, matching_warnings, pipeline_counts, run_collection
 
 
 class DraftFacts(BaseModel):
@@ -21,7 +24,14 @@ def _week_start(today: date | None = None) -> str:
     return (today - timedelta(days=today.weekday())).isoformat()
 
 
-def hidden_rules_router(store: Store, current_user: Callable[[], Awaitable[str]]) -> APIRouter:
+def cron_authorized(secret: str | None, authorization: str | None) -> bool:
+    expected = f"Bearer {secret}" if secret else ""
+    if not expected or not authorization or len(authorization) != len(expected):
+        return False
+    return hmac.compare_digest(authorization, expected)
+
+
+def hidden_rules_router(store: Store, current_user: Callable[[], Awaitable[str]], fetch=None) -> APIRouter:
     """Create a router using GoHook's existing authenticated-user dependency."""
     router = APIRouter(prefix="/hidden-rules", tags=["hidden-rules"])
 
@@ -51,5 +61,19 @@ def hidden_rules_router(store: Store, current_user: Callable[[], Awaitable[str]]
             "subreddit": subreddit.lower(),
             "warnings": await matching_warnings(store, subreddit, body.facts),
         }
+
+    @router.post("/cron/collect")
+    async def collect(authorization: str | None = Header(default=None)):
+        if not cron_authorized(os.getenv("CRON_SECRET"), authorization):
+            raise HTTPException(status_code=401, detail="Not allowed.")
+        await store.ensure_tracked(FIRST_TEN)
+        return await run_collection(store, FIRST_TEN, fetch or collect_public_posts)
+
+    @router.get("/health")
+    async def health(authorization: str | None = Header(default=None)):
+        if not cron_authorized(os.getenv("CRON_SECRET"), authorization):
+            raise HTTPException(status_code=401, detail="Not allowed.")
+        posts = await store.all_posts()
+        return {"tracked": await store.tracked_names(), **pipeline_counts(posts)}
 
     return router

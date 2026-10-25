@@ -24,12 +24,31 @@ class SupabaseStore:
         response.raise_for_status()
         return response.json()
 
+    async def ensure_tracked(self, names: Sequence[str]) -> None:
+        payload = [{"subreddit": name.lower(), "active": True} for name in names]
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.url}/rest/v1/tracked_subs", headers={**self.headers, "Prefer": "resolution=merge-duplicates"},
+                params={"on_conflict": "subreddit"}, json=payload, timeout=20,
+            )
+        response.raise_for_status()
+
+    async def tracked_names(self) -> list[str]:
+        rows = await self._get("tracked_subs", active="eq.true", select="subreddit")
+        return [row["subreddit"] for row in rows]
+
+    async def all_posts(self) -> Sequence[PostFacts]:
+        posts: list[PostFacts] = []
+        for name in await self.tracked_names():
+            posts.extend(await self.posts(name))
+        return posts
+
     async def posts(self, subreddit: str) -> Sequence[PostFacts]:
         rows = await self._get("sub_posts", subreddit=f"eq.{subreddit.lower()}")
         return [PostFacts(
             reddit_post_id=row["reddit_post_id"], subreddit=row["subreddit"],
             created_utc=datetime.fromisoformat(row["created_utc"].replace("Z", "+00:00")),
-            status=row["status"], has_link=row["has_link"], title_length=row["title_length"],
+            status=row["status"], removed_by=row.get("removed_by"), has_link=row["has_link"], title_length=row["title_length"],
             first_seen_at=datetime.fromisoformat(row["first_seen_at"].replace("Z", "+00:00")) if row.get("first_seen_at") else None,
             rechecked_at=datetime.fromisoformat(row["rechecked_at"].replace("Z", "+00:00")) if row.get("rechecked_at") else None,
             link_domain=row.get("link_domain"), is_self_promo=row.get("is_self_promo"),
@@ -102,8 +121,21 @@ class MemoryStore:
     def __init__(self, posts: Sequence[PostFacts] = (), sidebar: str = ""):
         self._posts = list(posts)
         self._sidebar = sidebar
+        self.tracked: list[str] = []
         self.rules: list[dict] = []
         self._votes: set[tuple[str, str, str]] = set()
+
+    async def ensure_tracked(self, names: Sequence[str]) -> None:
+        for name in names:
+            key = name.lower()
+            if key not in self.tracked:
+                self.tracked.append(key)
+
+    async def tracked_names(self) -> list[str]:
+        return list(self.tracked)
+
+    async def all_posts(self) -> Sequence[PostFacts]:
+        return list(self._posts)
 
     async def posts(self, subreddit: str) -> Sequence[PostFacts]:
         return [p for p in self._posts if p.subreddit == subreddit.lower()]

@@ -1,19 +1,50 @@
 # GoHook hidden-rule learner
 
-An isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. It was designed from the supplied GoHook commit without changing that repository.
+Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. GoHook itself has not been changed. This repo is not yet collecting live posts.
 
-## What is implemented
+## Done
 
-- Supabase migration for `tracked_subs`, `sub_posts`, `sub_rules`, and `rule_feedback`.
-- Public Reddit JSON collection (up to 300 posts), with a read-only integration seam for Composio.
-- 24–48 hour observation gate: first sightings are `pending`; only a later observation is eligible for removal labeling.
-- Deleted authors and sitewide removals are excluded.
-- Deterministic 70/30 learn/test split.
-- GPT-4o-mini candidate generation restricted to a validated JSON condition language.
-- Deterministic held-out validation: active only at ≥70% removal accuracy across at least 10 matching test posts, including at least one removal.
-- Matching-warning API, Scout payload API, and authenticated “This rule is wrong” feedback. Three distinct wrong votes in a calendar week hide the rule.
+- Schema written for `tracked_subs`, `sub_posts`, `sub_rules`, and `rule_feedback`.
+- Collector written for public Reddit JSON, up to 300 posts per subreddit.
+- First sightings stay `pending`. A later observation after 24–48 hours can be labeled `removed`, `stayed`, or `skip`.
+- Deleted authors and sitewide removals (`reddit`, `anti_evil_ops`) are marked `skip`.
+- Learner code written: a stable 70/30 split, a restricted JSON condition language, and a held-out gate of at least 70% accuracy on at least 10 matching test posts.
+- Warning, Scout, and “this rule is wrong” API code written. Three distinct wrong votes in a week hide a rule.
+- Tests are written in `tests/test_hidden_rules.py`.
+- One-day plan is in `MILESTONE-1.md`.
+- Working first ten subreddits are in `src/gohook_hidden_rules/cohort.py`.
+- `POST /hidden-rules/cron/collect` seeds those ten and collects them. It requires `Authorization: Bearer $CRON_SECRET`.
+- `GET /hidden-rules/health` returns tracked, pending, rechecked, removed, stayed, and skipped counts behind the same secret.
+- Code is pushed to https://github.com/chaitanyagatreddi/arc-solver-gohook.
 
-## Run tests
+## Pending
+
+- Replace the working first ten in `cohort.py` if these are not the subreddits to track.
+- Apply the migration to GoHook’s Supabase and prove the service role can write it.
+- Run the first collection and store real posts.
+- Deploy the protected daily recheck cron. The first real labels still need the 24–48 hour wait.
+- Add a failure alert and a handoff for the collection job. Health counts already exist behind the cron secret.
+- Mount this service into GoHook.
+- Show warnings in BanAware, return them from Scout, and record PostHog events.
+- Turn on weekly relearning after the first labeled data exists.
+- Define `is_self_promo` and how a later user post is tied to a warning.
+
+## Working first 10 subreddits
+
+Stored in code. Not yet inserted into a live database:
+
+1. `saas`
+2. `startups`
+3. `indiehackers`
+4. `sideproject`
+5. `automation`
+6. `nocode`
+7. `zapier`
+8. `claudeai`
+9. `localllama`
+10. `mistralai`
+
+## Run the tests
 
 ```bash
 python -m venv .venv
@@ -28,7 +59,7 @@ Apply `supabase/migrations/0001_hidden_rules.sql` after GoHook’s BanAware migr
 
 ## Mount in GoHook
 
-The source GoHook app already has FastAPI, Supabase REST, authenticated user dependencies, and `BanAware` / Scout surfaces. Mount the router using its existing verified user dependency—do not use the local `X-User-Id` development header:
+Use GoHook’s verified user dependency. Do not use the local `X-User-Id` header in production.
 
 ```python
 from gohook_hidden_rules import SupabaseStore, hidden_rules_router
@@ -37,20 +68,8 @@ store = SupabaseStore(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 app.include_router(hidden_rules_router(store, banaware._require_user))
 ```
 
-Use:
+- `POST /hidden-rules/subreddits/{subreddit}/evaluate` checks a draft against active rules.
+- `POST /hidden-rules/scout/check/{username}?subreddit=saas` returns the same warnings for Scout.
+- `POST /hidden-rules/rules/{rule_id}/wrong` records “this rule is wrong”.
 
-- `POST /hidden-rules/subreddits/{subreddit}/evaluate` with trusted draft/account facts to obtain warning cards.
-- `POST /hidden-rules/scout/check/{username}?subreddit=saas` with the same facts for Scout.
-- `POST /hidden-rules/rules/{rule_id}/wrong` from the warning card.
-
-The production cron must invoke `collect_and_stage` for the chosen subreddits and invoke `learn_subreddit` weekly. Collection and learning are intentionally separate: the latter cannot run until pending posts have been observed again.
-
-## Known integration decisions still required
-
-The PRD explicitly leaves these decisions open, so this repository does not invent them:
-
-1. The first 10 and eventual 50 tracked subreddits.
-2. Whether Composio supplies every author fact and removal field needed; public JSON is the fallback.
-3. The product definition of `is_self_promo`.
-4. How GoHook will attribute a user's later posted URL to `post_removed_after_warning_*`.
-5. The scheduler/hosting path and production PostHog event ownership.
+Collection and learning stay separate. Learning waits until posts have been observed again.

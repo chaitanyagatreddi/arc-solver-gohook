@@ -51,7 +51,7 @@ def post_from_reddit(subreddit: str, post: dict) -> PostFacts:
         reddit_post_id=str(post["id"]),
         subreddit=subreddit.lower(),
         created_utc=created,
-        status=status, has_link=bool(_link_domain(post)),
+        status=status, removed_by=removed_by, has_link=bool(_link_domain(post)),
         link_domain=_link_domain(post), title_length=len(str(post.get("title") or "")),
         flair=post.get("link_flair_text"), is_self_promo=None,
         author_age_days=None, author_karma=None, author_sub_comments=None, author_posts_today=None,
@@ -92,7 +92,8 @@ def stage_observations(existing: Sequence[PostFacts], observed: Sequence[PostFac
     for post in observed:
         prior = known.get(post.reddit_post_id)
         if prior is None:
-            staged.append(replace(post, status="pending", first_seen_at=now))
+            status = post.status if post.status == "skip" else "pending"
+            staged.append(replace(post, status=status, removed_by=post.removed_by if status == "skip" else None, first_seen_at=now))
         elif due_for_recheck(prior, now):
             staged.append(replace(post, first_seen_at=prior.first_seen_at, rechecked_at=now))
         else:
@@ -116,10 +117,38 @@ async def learn_subreddit(store: Store, proposer: RuleProposer, subreddit: str) 
     return results
 
 
-async def collect_and_stage(store: Store, subreddit: str, limit: int = 300) -> list[PostFacts]:
+def pipeline_counts(posts: Sequence[PostFacts]) -> dict[str, int]:
+    """Operator counts. Failures are counted by the job, not from stored posts."""
+    return {
+        "collected": len(posts),
+        "pending": sum(post.status == "pending" for post in posts),
+        "rechecked": sum(post.rechecked_at is not None for post in posts),
+        "removed": sum(post.status == "removed" for post in posts),
+        "stayed": sum(post.status == "stayed" for post in posts),
+        "skipped": sum(post.status == "skip" for post in posts),
+    }
+
+
+async def run_collection(store: Store, subreddits: Sequence[str], fetch, limit: int = 300) -> dict:
+    """Collect every tracked subreddit. One failure does not stop the rest."""
+    results = []
+    for name in subreddits:
+        try:
+            staged = await collect_and_stage(store, name, limit=limit, fetch=fetch)
+            results.append({"subreddit": name, "ok": True, **pipeline_counts(staged)})
+        except Exception as exc:
+            results.append({"subreddit": name, "ok": False, "error": type(exc).__name__})
+    return {
+        "subreddits": results,
+        "failed": sum(not row["ok"] for row in results),
+        "collected": sum(row.get("collected", 0) for row in results),
+    }
+
+
+async def collect_and_stage(store: Store, subreddit: str, limit: int = 300, fetch=None) -> list[PostFacts]:
     """Fetch current posts and persist only initial pending observations or due rechecks."""
     known = await store.posts(subreddit)
-    observed = await collect_public_posts(subreddit, limit)
+    observed = await (fetch or collect_public_posts)(subreddit, limit)
     staged = stage_observations(known, observed)
     await store.save_posts(staged)
     return staged

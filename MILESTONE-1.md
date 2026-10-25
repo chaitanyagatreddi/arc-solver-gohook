@@ -2,11 +2,13 @@
 
 **Day-one outcome:** a quiet, observable collection pipeline for ten selected subreddits. It does not show learned-rule warnings.
 
+**Paused after:** the working ten subreddits and the protected collection job are saved in code. Live Supabase seeding has not started.
+
 ## Milestone 1 — Pick the cohort
 **Complete in:** 15 minutes
 
-- [ ] Owner supplies the exact first 10 subreddits; no names are assumed.
-- [ ] Normalize them to lower case and seed `tracked_subs`.
+- [x] Working first 10 chosen from the founder brief and stored in `cohort.py`.
+- [ ] Seed those names into live `tracked_subs`.
 - [ ] Record each subreddit's current sidebar rules.
 
 **Done when:** 10 active `tracked_subs` rows exist.
@@ -33,7 +35,8 @@
 ## Milestone 4 — Recheck automation
 **Complete in:** 60 minutes to configure
 
-- [ ] Add a protected daily cron.
+- [x] Protected collection route exists: `POST /hidden-rules/cron/collect`.
+- [ ] Deploy that route on a daily schedule.
 - [ ] Re-observe only posts that have waited 24–48 hours.
 - [ ] Set their outcome to `removed`, `stayed`, or `skip`; retain `removed_by` when Reddit supplies it.
 - [ ] Retry transient Reddit/API failures without relabeling posts.
@@ -45,6 +48,7 @@
 ## Milestone 5 — Operational proof
 **Complete in:** 45 minutes
 
+- [x] `GET /hidden-rules/health` returns collection, pending, rechecked, removed, stayed, and skipped counts.
 - [ ] Log collection, pending, rechecked, removed, skipped, and failure counts per subreddit.
 - [ ] Add an operational alert for a failed collection or recheck.
 - [ ] Save a manual verification query or dashboard view.

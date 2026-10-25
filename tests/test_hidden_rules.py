@@ -2,6 +2,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from fastapi.testclient import TestClient
+
+from gohook_hidden_rules.api import hidden_rules_router
+from gohook_hidden_rules.cohort import FIRST_TEN
 from gohook_hidden_rules.conditions import InvalidCondition, matches, validate
 from gohook_hidden_rules.learner import evaluate, parse_candidates, split_posts
 from gohook_hidden_rules.models import CandidateRule, PostFacts
@@ -65,6 +69,47 @@ async def test_three_distinct_wrong_votes_hide_a_rule():
     assert await store.feedback_wrong("rule-1", "b", "2026-10-19") == 2
     assert await store.feedback_wrong("rule-1", "c", "2026-10-19") == 3
     assert await store.active_rules("saas") == []
+
+
+def test_deleted_posts_stay_skipped_on_first_collection():
+    observed = PostFacts("deleted", "saas", datetime(2026, 10, 25, tzinfo=timezone.utc), "skip", False, 1, removed_by=None)
+    staged = stage_observations([], [observed], datetime(2026, 10, 25, tzinfo=timezone.utc))[0]
+    assert staged.status == "skip"
+
+
+def test_first_ten_is_the_founder_cohort():
+    assert len(FIRST_TEN) == 10
+    assert FIRST_TEN[:4] == ("saas", "startups", "indiehackers", "sideproject")
+
+
+@pytest.mark.asyncio
+async def test_collection_job_is_protected_and_reports_counts(monkeypatch):
+    from fastapi import FastAPI
+
+    async def fetch(subreddit, limit):
+        if subreddit == "zapier":
+            raise TimeoutError("reddit")
+        return [post(subreddit, linked=True)]
+
+    store = MemoryStore()
+    app = FastAPI()
+
+    async def user():
+        return "user-1"
+
+    app.include_router(hidden_rules_router(store, user, fetch=fetch))
+    monkeypatch.setenv("CRON_SECRET", "test-secret")
+    client = TestClient(app)
+    denied = client.post("/hidden-rules/cron/collect")
+    assert denied.status_code == 401
+    accepted = client.post("/hidden-rules/cron/collect", headers={"Authorization": "Bearer test-secret"})
+    assert accepted.status_code == 200
+    body = accepted.json()
+    assert body["failed"] == 1
+    assert body["collected"] == 9
+    assert await store.tracked_names() == list(FIRST_TEN)
+    health = client.get("/hidden-rules/health", headers={"Authorization": "Bearer test-secret"})
+    assert health.json()["pending"] == 9
 
 
 def test_invalid_model_candidates_are_dropped():

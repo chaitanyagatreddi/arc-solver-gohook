@@ -18,6 +18,7 @@ class PostFacts:
     title_length: int
     first_seen_at: datetime | None = None
     rechecked_at: datetime | None = None
+    removed_by: str | None = None
     link_domain: str | None = None
     is_self_promo: bool | None = None
     flair: str | None = None
