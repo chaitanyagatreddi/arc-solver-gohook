@@ -9,7 +9,7 @@ from gohook_hidden_rules.cohort import FIRST_TEN
 from gohook_hidden_rules.conditions import InvalidCondition, matches, validate
 from gohook_hidden_rules.learner import evaluate, parse_candidates, split_posts
 from gohook_hidden_rules.models import CandidateRule, PostFacts
-from gohook_hidden_rules.service import classify_removal, due_for_recheck, post_from_fetchlayer, posts_from_rss, stage_observations
+from gohook_hidden_rules.service import classify_removal, due_for_recheck, post_from_fetchlayer, posts_from_rss, sidebar_text, stage_observations
 from gohook_hidden_rules.stores import MemoryStore
 
 
@@ -69,6 +69,14 @@ async def test_three_distinct_wrong_votes_hide_a_rule():
     assert await store.feedback_wrong("rule-1", "b", "2026-10-19") == 2
     assert await store.feedback_wrong("rule-1", "c", "2026-10-19") == 3
     assert await store.active_rules("saas") == []
+
+
+def test_sidebar_text_keeps_written_rules_in_order():
+    text = sidebar_text({"rules": [
+        {"number": 1, "title": "No spam", "descriptionText": "Do not pitch."},
+        {"number": 2, "title": "Be kind", "descriptionText": ""},
+    ]})
+    assert text == "1. No spam\nDo not pitch.\n\n2. Be kind"
 
 
 def test_rss_page_keeps_learner_columns_only():

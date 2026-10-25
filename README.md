@@ -21,7 +21,7 @@ Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. Go
 
 - Replace the working first ten in `cohort.py` if these are not the subreddits to track.
 - Apply the verified migration to GoHook’s Supabase. Local Postgres already accepted it.
-- Wait 24–48 hours, then recheck the 250 pending posts. Public Reddit JSON is still blocked, so the recheck uses FetchLayer.
+- Wait until 2026-10-26 17:47 UTC, then recheck the 250 pending posts through FetchLayer. Sidebar rules for the ten subreddits are already stored locally. `sideproject` and `mistralai` publish none.
 - Deploy the protected daily recheck cron. The first real labels still need the 24–48 hour wait.
 - Add a failure alert and a handoff for the collection job. Health counts already exist behind the cron secret.
 - Mount this service into GoHook.

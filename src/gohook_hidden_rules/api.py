@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from .cohort import FIRST_TEN
 from .conditions import InvalidCondition
-from .service import Store, collect_public_posts, matching_warnings, pipeline_counts, run_collection
+from .service import Store, collect_fetchlayer_posts, collect_public_posts, matching_warnings, pipeline_counts, run_collection
 
 
 class DraftFacts(BaseModel):
@@ -67,7 +67,8 @@ def hidden_rules_router(store: Store, current_user: Callable[[], Awaitable[str]]
         if not cron_authorized(os.getenv("CRON_SECRET"), authorization):
             raise HTTPException(status_code=401, detail="Not allowed.")
         await store.ensure_tracked(FIRST_TEN)
-        return await run_collection(store, FIRST_TEN, fetch or collect_public_posts)
+        default_fetch = collect_fetchlayer_posts if os.getenv("FETCHLAYER_TOKEN") else collect_public_posts
+        return await run_collection(store, FIRST_TEN, fetch or default_fetch)
 
     @router.get("/health")
     async def health(authorization: str | None = Header(default=None)):

@@ -2,14 +2,14 @@
 
 **Day-one outcome:** a quiet, observable collection pipeline for ten selected subreddits. It does not show learned-rule warnings.
 
-**Paused after:** the first collection stored 250 posts, 25 per subreddit, all `pending`. The 24–48 hour recheck has not started.
+**Paused after:** sidebar rules are stored for the ten subreddits. The 250 posts stay pending until 2026-10-26 17:47 UTC.
 
 ## Milestone 1 — Pick the cohort
 **Complete in:** 15 minutes
 
 - [x] Working first 10 chosen from the founder brief and stored in `cohort.py`.
 - [ ] Seed those names into live `tracked_subs`.
-- [ ] Record each subreddit's current sidebar rules.
+- [x] Record each subreddit's current sidebar rules. `sideproject` and `mistralai` publish none.
 
 **Done when:** 10 active `tracked_subs` rows exist.
 

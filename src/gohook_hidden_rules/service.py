@@ -140,6 +140,37 @@ def post_from_fetchlayer(subreddit: str, item: dict) -> PostFacts | None:
     )
 
 
+def sidebar_text(payload: dict) -> str:
+    """Written rules only, in the community's own order."""
+    lines = []
+    for rule in payload.get("rules") or []:
+        title = str(rule.get("title") or "").strip()
+        if not title:
+            continue
+        number = rule.get("number")
+        lines.append(f"{number}. {title}" if number else title)
+        body = str(rule.get("descriptionText") or "").strip()
+        if body:
+            lines.append(body)
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+async def fetch_sidebar(subreddit: str) -> str:
+    import os
+    token = os.getenv("FETCHLAYER_TOKEN")
+    if not token:
+        raise RuntimeError("FETCHLAYER_TOKEN is not set")
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            "https://api.fetchlayer.dev/reddit/community-details",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"subreddit": subreddit},
+        )
+        response.raise_for_status()
+    return sidebar_text(response.json())
+
+
 async def collect_fetchlayer_posts(subreddit: str, limit: int = 25) -> list[PostFacts]:
     """One FetchLayer page of new posts. The token stays in the environment."""
     import os
