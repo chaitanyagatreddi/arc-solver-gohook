@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol, Sequence
 from urllib.parse import urlparse
 
+import xml.etree.ElementTree as ET
+
 import httpx
 
 from .learner import SYSTEM_PROMPT, kept_rules, learner_rows, parse_candidates, split_posts
@@ -75,6 +77,97 @@ async def collect_public_posts(subreddit: str, limit: int = 100) -> list[PostFac
             if not after:
                 break
     return [post_from_reddit(subreddit, item["data"]) for item in children if item.get("kind") == "t3"]
+
+
+ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def posts_from_rss(subreddit: str, feed_xml: str) -> list[PostFacts]:
+    """Public RSS entries. Removal labels are not in this feed, so first sightings stay pending."""
+    try:
+        root = ET.fromstring(feed_xml)
+    except ET.ParseError:
+        return []
+    posts = []
+    for entry in root.findall(f"{ATOM}entry"):
+        raw_id = entry.findtext(f"{ATOM}id") or ""
+        post_id = raw_id.removeprefix("t3_")
+        updated = entry.findtext(f"{ATOM}updated")
+        link = entry.find(f"{ATOM}link")
+        href = link.get("href") if link is not None else ""
+        host = urlparse(href).hostname or ""
+        author = (entry.findtext(f"{ATOM}author/{ATOM}name") or "").removeprefix("/u/")
+        if not post_id or not updated:
+            continue
+        posts.append(PostFacts(
+            reddit_post_id=post_id,
+            subreddit=subreddit.lower(),
+            created_utc=datetime.fromisoformat(updated),
+            status="skip" if author == "[deleted]" else "stayed",
+            has_link=bool(host) and not host.endswith("reddit.com"),
+            title_length=len(entry.findtext(f"{ATOM}title") or ""),
+            link_domain=host.removeprefix("www.") if host and not host.endswith("reddit.com") else None,
+        ))
+    return posts
+
+
+def post_from_fetchlayer(subreddit: str, item: dict) -> PostFacts | None:
+    """Map one FetchLayer community post onto the learner columns."""
+    post_id = item.get("id")
+    created_at = item.get("createdAt")
+    if not post_id or not created_at:
+        return None
+    category = item.get("removedByCategory")
+    author = item.get("author")
+    deleted = author in (None, "[deleted]", "deleted") or category == "deleted"
+    status, removed_by = classify_removal({
+        "author": "[deleted]" if deleted else author,
+        "removed_by_category": None if category in (None, "deleted") else category,
+        "selftext": "",
+    })
+    domain = str(item.get("domain") or "").lower()
+    external = bool(domain) and not domain.startswith("self.") and not domain.endswith("reddit.com")
+    return PostFacts(
+        reddit_post_id=str(post_id),
+        subreddit=subreddit.lower(),
+        created_utc=datetime.fromisoformat(created_at.replace("Z", "+00:00")),
+        status=status,
+        removed_by=removed_by,
+        has_link=external,
+        link_domain=domain.removeprefix("www.") if external else None,
+        title_length=len(str(item.get("title") or "")),
+        flair=item.get("flair"),
+    )
+
+
+async def collect_fetchlayer_posts(subreddit: str, limit: int = 25) -> list[PostFacts]:
+    """One FetchLayer page of new posts. The token stays in the environment."""
+    import os
+    token = os.getenv("FETCHLAYER_TOKEN")
+    if not token:
+        raise RuntimeError("FETCHLAYER_TOKEN is not set")
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            "https://api.fetchlayer.dev/reddit/community-posts",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"subreddit": subreddit, "sort": "new", "limit": limit},
+        )
+        response.raise_for_status()
+    posts = []
+    for item in response.json().get("items") or []:
+        post = post_from_fetchlayer(subreddit, item)
+        if post is not None:
+            posts.append(post)
+    return posts
+
+
+async def collect_public_rss(subreddit: str, limit: int = 25) -> list[PostFacts]:
+    """One public RSS page. JSON listing is blocked from this network."""
+    headers = {"User-Agent": "python:arc-solver-gohook:0.1 (read-only)"}
+    async with httpx.AsyncClient(headers=headers, timeout=30) as client:
+        response = await client.get(f"https://www.reddit.com/r/{subreddit}/new.rss", params={"limit": limit})
+        response.raise_for_status()
+    return posts_from_rss(subreddit, response.text)
 
 
 def due_for_recheck(post: PostFacts, now: datetime | None = None) -> bool:

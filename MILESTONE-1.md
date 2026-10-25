@@ -2,7 +2,7 @@
 
 **Day-one outcome:** a quiet, observable collection pipeline for ten selected subreddits. It does not show learned-rule warnings.
 
-**Paused after:** the local database has the ten subreddits, but the first collection stored no posts. Reddit returned 403 for every public JSON request.
+**Paused after:** the first collection stored 250 posts, 25 per subreddit, all `pending`. The 24–48 hour recheck has not started.
 
 ## Milestone 1 — Pick the cohort
 **Complete in:** 15 minutes
@@ -26,10 +26,10 @@
 ## Milestone 3 — First collection
 **Complete in:** 90 minutes
 
-- [ ] Read one public page, about 100 posts, for every tracked subreddit. Reddit blocked this run with 403.
-- [ ] Store initial observations as `pending`.
-- [ ] Save post ID, timestamps, title/link/flair facts, and raw source response.
-- [ ] Mark deleted authors and sitewide removals as `skip`.
+- [x] Read one FetchLayer page, 25 posts, for every tracked subreddit. Public JSON stayed blocked.
+- [x] Store initial observations as `pending`.
+- [x] Save post ID, timestamps, and title/link/flair facts. The raw source response is not stored.
+- [x] Mark deleted authors and sitewide removals as `skip`. None of these 250 posts were in that state.
 
 **Done when:** every target subreddit has stored posts and no duplicate `reddit_post_id`.
 

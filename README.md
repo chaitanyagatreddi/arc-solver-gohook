@@ -1,6 +1,6 @@
 # GoHook hidden-rule learner
 
-Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. GoHook itself has not been changed. This repo is not yet collecting live posts.
+Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. GoHook itself has not been changed. The local database holds the first collection: 250 pending posts.
 
 ## Done
 
@@ -21,7 +21,7 @@ Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. Go
 
 - Replace the working first ten in `cohort.py` if these are not the subreddits to track.
 - Apply the verified migration to GoHook’s Supabase. Local Postgres already accepted it.
-- Run the first collection again once Reddit public JSON is reachable. The local database has the ten subreddits and zero posts; Reddit returned 403.
+- Wait 24–48 hours, then recheck the 250 pending posts. Public Reddit JSON is still blocked, so the recheck uses FetchLayer.
 - Deploy the protected daily recheck cron. The first real labels still need the 24–48 hour wait.
 - Add a failure alert and a handoff for the collection job. Health counts already exist behind the cron secret.
 - Mount this service into GoHook.
@@ -31,7 +31,7 @@ Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. Go
 
 ## Working first 10 subreddits
 
-Stored in code. Not yet inserted into a live database:
+Stored in code and in the local database:
 
 1. `saas`
 2. `startups`

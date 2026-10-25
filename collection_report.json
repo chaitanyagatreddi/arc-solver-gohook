@@ -1,48 +1,8 @@
 {
-  "page_size": 100,
-  "stored_this_run": 0,
-  "failures": [
-    {
-      "subreddit": "saas",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "startups",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "indiehackers",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "sideproject",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "automation",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "nocode",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "zapier",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "claudeai",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "localllama",
-      "error": "HTTPStatusError"
-    },
-    {
-      "subreddit": "mistralai",
-      "error": "HTTPStatusError"
-    }
-  ],
+  "page_size": 25,
+  "source": "fetchlayer-community-posts",
+  "stored_this_run": 250,
+  "failures": [],
   "duplicate_ids": 0,
-  "counts": " ?column? \n----------\n(0 rows)\n\n"
+  "counts": "        ?column?         \n-------------------------\n automation pending 25\n claudeai pending 25\n indiehackers pending 25\n localllama pending 25\n mistralai pending 25\n nocode pending 25\n saas pending 25\n sideproject pending 25\n startups pending 25\n zapier pending 25\n(10 rows)\n\n"
 }

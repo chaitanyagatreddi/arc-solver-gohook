@@ -9,12 +9,13 @@ import asyncio
 import csv
 import io
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
 
 from gohook_hidden_rules.cohort import FIRST_TEN
-from gohook_hidden_rules.service import collect_public_posts, stage_observations
+from gohook_hidden_rules.service import collect_fetchlayer_posts, stage_observations
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "arc-solver-gohook-data"
@@ -56,7 +57,7 @@ def ensure_database() -> None:
 
 def copy_posts(posts) -> None:
     buffer = io.StringIO()
-    writer = csv.writer(buffer)
+    writer = csv.writer(buffer, lineterminator="\n")
     for post in posts:
         writer.writerow([
             post.subreddit, post.reddit_post_id, post.created_utc.isoformat(),
@@ -64,13 +65,13 @@ def copy_posts(posts) -> None:
             post.status, post.removed_by or "", "true" if post.has_link else "false",
             post.link_domain or "", post.title_length, post.flair or "",
         ])
-    sql = """
-        create temporary table load_posts (
-          subreddit text, reddit_post_id text, created_utc timestamptz, first_seen_at timestamptz,
-          status text, removed_by text, has_link boolean, link_domain text, title_length integer, flair text
-        );
-        copy load_posts from stdin with (format csv, null '');
-    """
+    sql = (
+        "create temporary table load_posts (\n"
+        "  subreddit text, reddit_post_id text, created_utc timestamptz, first_seen_at timestamptz,\n"
+        "  status text, removed_by text, has_link boolean, link_domain text, title_length integer, flair text\n"
+        ");\n"
+        "copy load_posts from stdin with (format csv, null '');\n"
+    )
     docker("exec", "-i", NAME, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres",
            input_text=sql + buffer.getvalue() + "\\.\ninsert into public.sub_posts "
            "(subreddit, reddit_post_id, created_utc, first_seen_at, status, removed_by, has_link, link_domain, title_length, flair) "
@@ -79,13 +80,24 @@ def copy_posts(posts) -> None:
            "on conflict (reddit_post_id) do nothing;\n")
 
 
+def load_env() -> None:
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        key, _, value = line.partition("=")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
 async def main() -> None:
+    load_env()
     ensure_database()
     stored = []
     failures = []
     for name in FIRST_TEN:
         try:
-            observed = await collect_public_posts(name, limit=100)
+            observed = await collect_fetchlayer_posts(name, limit=25)
             staged = stage_observations([], observed)
             copy_posts(staged)
             stored.extend(staged)
@@ -99,7 +111,8 @@ async def main() -> None:
     """)
     duplicate_check = psql("select count(*) - count(distinct reddit_post_id) from public.sub_posts;")
     report = {
-        "page_size": 100,
+        "page_size": 25,
+        "source": "fetchlayer-community-posts",
         "stored_this_run": len(stored),
         "failures": failures,
         "duplicate_ids": int(duplicate_check.strip().splitlines()[-2].strip()),

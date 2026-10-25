@@ -9,7 +9,7 @@ from gohook_hidden_rules.cohort import FIRST_TEN
 from gohook_hidden_rules.conditions import InvalidCondition, matches, validate
 from gohook_hidden_rules.learner import evaluate, parse_candidates, split_posts
 from gohook_hidden_rules.models import CandidateRule, PostFacts
-from gohook_hidden_rules.service import classify_removal, due_for_recheck, stage_observations
+from gohook_hidden_rules.service import classify_removal, due_for_recheck, post_from_fetchlayer, posts_from_rss, stage_observations
 from gohook_hidden_rules.stores import MemoryStore
 
 
@@ -69,6 +69,29 @@ async def test_three_distinct_wrong_votes_hide_a_rule():
     assert await store.feedback_wrong("rule-1", "b", "2026-10-19") == 2
     assert await store.feedback_wrong("rule-1", "c", "2026-10-19") == 3
     assert await store.active_rules("saas") == []
+
+
+def test_rss_page_keeps_learner_columns_only():
+    feed = """<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry>
+      <id>t3_abc</id><updated>2026-10-25T15:00:00+00:00</updated><title>Hello</title>
+      <author><name>/u/ada</name></author><link href="https://example.com/tool"/>
+    </entry></feed>"""
+    parsed = posts_from_rss("SaaS", feed)[0]
+    assert (parsed.reddit_post_id, parsed.subreddit, parsed.title_length, parsed.has_link, parsed.link_domain) == ("abc", "saas", 5, True, "example.com")
+
+
+def test_fetchlayer_page_maps_learner_columns():
+    item = {
+        "id": "abc", "author": "ada", "title": "Hello", "domain": "example.com",
+        "createdAt": "2026-10-25T15:00:00.000Z", "flair": "Show", "removed": None, "removedByCategory": None,
+    }
+    parsed = post_from_fetchlayer("SaaS", item)
+    assert parsed is not None
+    assert (parsed.reddit_post_id, parsed.subreddit, parsed.has_link, parsed.link_domain, parsed.flair, parsed.title_length) == (
+        "abc", "saas", True, "example.com", "Show", 5,
+    )
+    deleted = post_from_fetchlayer("saas", {**item, "removedByCategory": "deleted"})
+    assert deleted is not None and deleted.status == "skip"
 
 
 def test_deleted_posts_stay_skipped_on_first_collection():
