@@ -35,7 +35,7 @@ def classify_removal(post: dict) -> tuple[str, str | None]:
     """Never classify author deletions or sitewide actions as moderator evidence."""
     removed_by = post.get("removed_by_category")
     body = post.get("selftext")
-    if body == "[deleted]" or post.get("author") in (None, "[deleted]"):
+    if body == "[deleted]" or post.get("author") == "[deleted]":
         return "skip", None
     if removed_by in {"reddit", "anti_evil_ops"}:
         return "skip", str(removed_by)
