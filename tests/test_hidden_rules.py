@@ -1,0 +1,72 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from gohook_hidden_rules.conditions import InvalidCondition, matches, validate
+from gohook_hidden_rules.learner import evaluate, parse_candidates, split_posts
+from gohook_hidden_rules.models import CandidateRule, PostFacts
+from gohook_hidden_rules.service import classify_removal, due_for_recheck, stage_observations
+from gohook_hidden_rules.stores import MemoryStore
+
+
+def post(n: int, *, removed: bool = False, linked: bool = True, seen=None) -> PostFacts:
+    return PostFacts(
+        reddit_post_id=str(n), subreddit="saas", created_utc=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        status="removed" if removed else "stayed", has_link=linked, title_length=30, first_seen_at=seen,
+    )
+
+
+def test_condition_language_rejects_unknown_field_and_handles_missing_data():
+    with pytest.raises(InvalidCondition):
+        validate({"field": "moderator_mood", "op": "eq", "value": "strict"})
+    condition = {"all": [{"field": "has_link", "op": "eq", "value": True}, {"field": "author_karma", "op": "lt", "value": 100}]}
+    assert not matches(condition, {"has_link": True, "author_karma": None})
+    assert matches(condition, {"has_link": True, "author_karma": 3})
+
+
+def test_rule_passes_only_held_out_accuracy_and_volume_gate():
+    candidate = CandidateRule("Links are removed.", {"field": "has_link", "op": "eq", "value": True})
+    held_out = [post(i, removed=i < 8) for i in range(10)]
+    result = evaluate(candidate, held_out)
+    assert (result.correct, result.tested, result.accuracy, result.eligible) == (8, 10, 0.8, True)
+    assert not evaluate(candidate, held_out[:9]).eligible
+
+
+def test_stable_split_never_includes_pending_posts():
+    items = [post(i, removed=i % 2 == 0) for i in range(20)]
+    items.append(PostFacts("pending", "saas", datetime.now(timezone.utc), "pending", False, 1))
+    first = split_posts(items, "SaaS")
+    assert first == split_posts(items, "SaaS")
+    assert all(item.status != "pending" for group in first for item in group)
+
+
+def test_first_observation_is_pending_then_rechecked_after_a_day():
+    now = datetime(2026, 10, 25, tzinfo=timezone.utc)
+    observed = post(1, removed=True)
+    first = stage_observations([], [observed], now)[0]
+    assert first.status == "pending"
+    assert not due_for_recheck(first, now + timedelta(hours=23))
+    second = stage_observations([first], [observed], now + timedelta(hours=25))[0]
+    assert second.status == "removed"
+    assert second.rechecked_at == now + timedelta(hours=25)
+
+
+def test_deleted_and_sitewide_removals_are_skipped():
+    assert classify_removal({"selftext": "[deleted]"}) == ("skip", None)
+    assert classify_removal({"selftext": "", "removed_by_category": "anti_evil_ops"}) == ("skip", "anti_evil_ops")
+    assert classify_removal({"selftext": "[removed]", "removed_by_category": "moderator"}) == ("removed", "moderator")
+
+
+@pytest.mark.asyncio
+async def test_three_distinct_wrong_votes_hide_a_rule():
+    store = MemoryStore()
+    await store.save_rule("saas", evaluate(CandidateRule("A", {"field": "has_link", "op": "eq", "value": True}), [post(i, removed=True) for i in range(10)]))
+    assert await store.feedback_wrong("rule-1", "a", "2026-10-19") == 1
+    assert await store.feedback_wrong("rule-1", "b", "2026-10-19") == 2
+    assert await store.feedback_wrong("rule-1", "c", "2026-10-19") == 3
+    assert await store.active_rules("saas") == []
+
+
+def test_invalid_model_candidates_are_dropped():
+    candidates = parse_candidates('{"rules":[{"rule_text":"ok","condition":{"field":"has_link","op":"eq","value":true}},{"rule_text":"bad","condition":{"field":"unknown","op":"eq","value":true}}]}')
+    assert [rule.rule_text for rule in candidates] == ["ok"]
