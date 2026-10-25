@@ -72,3 +72,4 @@ alter table public.sub_posts enable row level security;
 alter table public.sub_rules enable row level security;
 alter table public.rule_feedback enable row level security;
 revoke all on public.tracked_subs, public.sub_posts, public.sub_rules, public.rule_feedback from anon, authenticated;
+grant all on public.tracked_subs, public.sub_posts, public.sub_rules, public.rule_feedback to service_role;

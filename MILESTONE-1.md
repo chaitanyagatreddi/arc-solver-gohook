@@ -2,7 +2,7 @@
 
 **Day-one outcome:** a quiet, observable collection pipeline for ten selected subreddits. It does not show learned-rule warnings.
 
-**Paused after:** the working ten subreddits and the protected collection job are saved in code. Live Supabase seeding has not started.
+**Paused after:** the storage migration is verified on a local database. It has not been applied to GoHook's Supabase.
 
 ## Milestone 1 — Pick the cohort
 **Complete in:** 15 minutes
@@ -16,9 +16,10 @@
 ## Milestone 2 — Create safe storage
 **Complete in:** 30 minutes
 
-- [ ] Apply `supabase/migrations/0001_hidden_rules.sql`.
-- [ ] Confirm the service role can write and read all four tables.
-- [ ] Confirm browser users cannot directly read or modify raw collection data.
+- [x] Apply `supabase/migrations/0001_hidden_rules.sql` on a local database.
+- [x] Confirm the service role can write and delete rows in all four tables.
+- [x] Confirm the browser role cannot read `tracked_subs`.
+- [ ] Apply the same migration to GoHook's Supabase.
 
 **Done when:** the migration succeeds and a smoke-test row can be inserted and deleted.
 
