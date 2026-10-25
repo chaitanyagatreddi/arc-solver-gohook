@@ -2,7 +2,7 @@
 
 **Day-one outcome:** a quiet, observable collection pipeline for ten selected subreddits. It does not show learned-rule warnings.
 
-**Paused after:** the storage migration is verified on a local database. It has not been applied to GoHook's Supabase.
+**Paused after:** the local database has the ten subreddits, but the first collection stored no posts. Reddit returned 403 for every public JSON request.
 
 ## Milestone 1 — Pick the cohort
 **Complete in:** 15 minutes
@@ -26,7 +26,7 @@
 ## Milestone 3 — First collection
 **Complete in:** 90 minutes
 
-- [ ] Read up to 300 recent posts for every tracked subreddit.
+- [ ] Read one public page, about 100 posts, for every tracked subreddit. Reddit blocked this run with 403.
 - [ ] Store initial observations as `pending`.
 - [ ] Save post ID, timestamps, title/link/flair facts, and raw source response.
 - [ ] Mark deleted authors and sitewide removals as `skip`.

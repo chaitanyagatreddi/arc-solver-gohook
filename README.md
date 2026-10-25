@@ -21,7 +21,7 @@ Isolated implementation of the “Learn Each Subreddit's Hidden Rules” PRD. Go
 
 - Replace the working first ten in `cohort.py` if these are not the subreddits to track.
 - Apply the verified migration to GoHook’s Supabase. Local Postgres already accepted it.
-- Run the first collection and store real posts.
+- Run the first collection again once Reddit public JSON is reachable. The local database has the ten subreddits and zero posts; Reddit returned 403.
 - Deploy the protected daily recheck cron. The first real labels still need the 24–48 hour wait.
 - Add a failure alert and a handoff for the collection job. Health counts already exist behind the cron secret.
 - Mount this service into GoHook.
